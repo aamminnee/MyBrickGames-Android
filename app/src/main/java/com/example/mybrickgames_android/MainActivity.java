@@ -100,8 +100,19 @@ public class MainActivity extends AppCompatActivity {
         // activation du stockage dom pour conserver les tokens de connexion
         parametresWeb.setDomStorageEnabled(true);
 
-        // empecher l'ouverture des liens dans un navigateur externe
-        maWebView.setWebViewClient(new WebViewClient());
+        // empecher l'ouverture des liens dans un navigateur externe et cacher le footer a la fin du chargement
+        maWebView.setWebViewClient(new WebViewClient() {
+            @Override
+            public void onPageFinished(WebView view, String url) {
+                super.onPageFinished(view, url);
+
+                // execution du code javascript pour cacher la balise footer
+                view.evaluateJavascript("javascript:(function() { " +
+                        "var footer = document.getElementsByTagName('footer')[0];" +
+                        "if(footer) { footer.style.display = 'none'; }" +
+                        "})()", null);
+            }
+        });
 
         // ajout de l'interface javascript pour declencher les notifications depuis le site web
         maWebView.addJavascriptInterface(new InterfaceWeb(), "ApplicationAndroid");
@@ -177,9 +188,7 @@ public class MainActivity extends AppCompatActivity {
         });
     }
 
-    /**
-     * requete la permission d'afficher des notifications (android 13+)
-     */
+    // requete la permission d'afficher des notifications (android 13+)
     private void demanderPermissionNotification() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
@@ -188,9 +197,7 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    /**
-     * configure une tache en arriere-plan pour interroger le serveur
-     */
+    // configure une tache en arriere-plan pour interroger le serveur
     private void configurerPingServeur() {
         // verifier le serveur toutes les 15 minutes
         PeriodicWorkRequest requetePing = new PeriodicWorkRequest.Builder(NotificationWorker.class, 15, TimeUnit.MINUTES).build();
@@ -201,9 +208,7 @@ public class MainActivity extends AppCompatActivity {
         );
     }
 
-    /**
-     * interface pour la communication entre javascript et android
-     */
+    // interface pour la communication entre javascript et android
     public class InterfaceWeb {
 
         // suppression de l'avertissement car cette methode est appelee par javascript, pas par java
