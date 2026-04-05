@@ -6,4 +6,9 @@
     </style>
 
     <style name="Theme.MyBrickGamesAndroid" parent="Base.Theme.MyBrickGamesAndroid" />
+
+    <!-- theme specifique pour forcer la bulle du menu (indicateur actif) en jaune -->
+    <style name="BottomNavTheme" parent="">
+        <item name="colorSecondaryContainer">#FFFF00</item>
+    </style>
 </resources>

@@ -34,6 +34,9 @@ import androidx.work.ExistingPeriodicWorkPolicy;
 import androidx.work.PeriodicWorkRequest;
 import androidx.work.WorkManager;
 
+// importation necessaire pour le menu de navigation
+import com.google.android.material.bottomnavigation.BottomNavigationView;
+
 import java.util.concurrent.TimeUnit;
 
 public class MainActivity extends AppCompatActivity {
@@ -47,6 +50,9 @@ public class MainActivity extends AppCompatActivity {
 
     // code de permission pour les notifications
     private static final int CODE_PERMISSION_NOTIF = 112;
+
+    // drapeau pour savoir si on doit scroller vers la zone de drag and drop
+    private boolean scrollToDragDrop = false;
 
     @SuppressLint("SetJavaScriptEnabled")
     @Override
@@ -111,6 +117,29 @@ public class MainActivity extends AppCompatActivity {
                         "var footer = document.getElementsByTagName('footer')[0];" +
                         "if(footer) { footer.style.display = 'none'; }" +
                         "})()", null);
+
+                // met a jour le bouton jaune du menu en fonction de l'url sans recharger la page
+                BottomNavigationView menuNavigation = findViewById(R.id.bottom_navigation);
+                if (url != null) {
+                    if (url.contains("play")) {
+                        menuNavigation.getMenu().findItem(R.id.nav_play).setChecked(true);
+                    } else if (url.contains("create")) {
+                        menuNavigation.getMenu().findItem(R.id.nav_create).setChecked(true);
+                    } else if (url.contains("profile") || url.contains("compte")) {
+                        menuNavigation.getMenu().findItem(R.id.nav_profile).setChecked(true);
+                    } else if (url.contains("setting")) {
+                        menuNavigation.getMenu().findItem(R.id.nav_setting).setChecked(true);
+                    } else {
+                        menuNavigation.getMenu().findItem(R.id.nav_home).setChecked(true);
+                    }
+                }
+
+                // scroll vers la zone de drag and drop ultra rapidement si le drapeau est actif
+                if (scrollToDragDrop) {
+                    // on utilise l'id 'drop-zone' trouve dans le fichier php
+                    view.evaluateJavascript("javascript:setTimeout(function() { var el = document.getElementById('drop-zone'); if(el) el.scrollIntoView({behavior: 'instant', block: 'center'}); }, 100);", null);
+                    scrollToDragDrop = false;
+                }
             }
         });
 
@@ -170,8 +199,42 @@ public class MainActivity extends AppCompatActivity {
             }
         });
 
-        // charger l'url de la boutique
+        // charger l'url de la boutique au demarrage
         maWebView.loadUrl("http://mybrickstore.duckdns.org");
+
+        // initialisation du menu de navigation en bas et gestion des clics
+        BottomNavigationView menuNavigation = findViewById(R.id.bottom_navigation);
+        menuNavigation.setOnItemSelectedListener(item -> {
+            int id = item.getItemId();
+            // modifiez les urls ci-dessous en fonction des vraies adresses de votre site
+            if (id == R.id.nav_home) {
+                maWebView.loadUrl("http://mybrickstore.duckdns.org/");
+                return true;
+            } else if (id == R.id.nav_play) {
+                maWebView.loadUrl("http://mybrickstore.duckdns.org/play");
+                return true;
+            } else if (id == R.id.nav_create) {
+                // verifie si on est deja sur la page d'accueil
+                String urlCourante = maWebView.getUrl();
+                if (urlCourante != null && (urlCourante.equals("http://mybrickstore.duckdns.org/") || urlCourante.equals("http://mybrickstore.duckdns.org"))) {
+                    // deja sur l'accueil, on injecte le javascript pour scroller ultra rapidement au centre
+                    // on utilise l'id 'drop-zone' du fichier php
+                    maWebView.evaluateJavascript("javascript:var el = document.getElementById('drop-zone'); if(el) el.scrollIntoView({behavior: 'instant', block: 'center'});", null);
+                } else {
+                    // charge l'accueil et active le drapeau pour scroller une fois charge
+                    scrollToDragDrop = true;
+                    maWebView.loadUrl("http://mybrickstore.duckdns.org/");
+                }
+                return true;
+            } else if (id == R.id.nav_profile) {
+                maWebView.loadUrl("http://mybrickstore.duckdns.org/compte");
+                return true;
+            } else if (id == R.id.nav_setting) {
+                maWebView.loadUrl("http://mybrickstore.duckdns.org/setting");
+                return true;
+            }
+            return false;
+        });
 
         // gestion du bouton retour (nouvelle methode non depreciee)
         getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true) {

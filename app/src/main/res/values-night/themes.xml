@@ -4,4 +4,9 @@
         <!-- Customize your dark theme here. -->
         <!-- <item name="colorPrimary">@color/my_dark_primary</item> -->
     </style>
+
+    <!-- theme specifique pour forcer la bulle du menu en jaune (mode sombre) -->
+    <style name="BottomNavTheme" parent="">
+        <item name="colorSecondaryContainer">#FFFF00</item>
+    </style>
 </resources>
