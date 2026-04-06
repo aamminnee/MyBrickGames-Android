@@ -39,6 +39,7 @@ import androidx.work.WorkManager;
 // necessary import for the navigation menu
 import com.google.android.material.bottomnavigation.BottomNavigationView;
 
+import java.util.Calendar;
 import java.util.concurrent.TimeUnit;
 
 public class MainActivity extends AppCompatActivity {
@@ -65,6 +66,7 @@ public class MainActivity extends AppCompatActivity {
         NotificationHelper.creerCanalNotification(this);
         demanderPermissionNotification();
         configurerPingServeur();
+        configurerDailyImageWorker();
 
         // configure the launcher for the android file chooser
         lanceurSelecteurFichier = registerForActivityResult(
@@ -201,8 +203,15 @@ public class MainActivity extends AppCompatActivity {
             }
         });
 
-        // load the store url on startup
-        maWebView.loadUrl("https://mybrickstore.duckdns.org");
+        // check if opened from daily image notification
+        boolean openDailyImage = getIntent().getBooleanExtra("open_daily_image", false);
+        if (openDailyImage) {
+            // load the daily image view
+            maWebView.loadUrl("https://mybrickstore.duckdns.org/image-du-jour");
+        } else {
+            // load the store url on startup
+            maWebView.loadUrl("https://mybrickstore.duckdns.org");
+        }
 
         // initialize the bottom navigation menu and handle clicks
         BottomNavigationView menuNavigation = findViewById(R.id.bottom_navigation);
@@ -220,7 +229,6 @@ public class MainActivity extends AppCompatActivity {
                 String urlCourante = maWebView.getUrl();
                 if (urlCourante != null && (urlCourante.equals("https://mybrickstore.duckdns.org/") || urlCourante.equals("https://mybrickstore.duckdns.org"))) {
                     // already on home, we inject javascript to scroll extremely quickly to the center
-                    // we use the 'drop-zone' id of the php file
                     maWebView.evaluateJavascript("javascript:var el = document.getElementById('drop-zone'); if(el) el.scrollIntoView({behavior: 'instant', block: 'center'});", null);
                 } else {
                     // load home and set the flag to scroll once loaded
@@ -253,6 +261,17 @@ public class MainActivity extends AppCompatActivity {
         });
     }
 
+    // handles intent when the application is already running in background
+    @Override
+    protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        if (intent != null && intent.getBooleanExtra("open_daily_image", false)) {
+            if (maWebView != null) {
+                maWebView.loadUrl("https://mybrickstore.duckdns.org/image-du-jour");
+            }
+        }
+    }
+
     // request permission to show notifications (android 13+)
     private void demanderPermissionNotification() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -273,6 +292,41 @@ public class MainActivity extends AppCompatActivity {
         );
     }
 
+    // configure a background task to fetch the daily image every 24 hours at 16:15
+    private void configurerDailyImageWorker() {
+        // calculate the delay from now until the next 16:15
+        Calendar currentDate = Calendar.getInstance();
+        Calendar dueDate = Calendar.getInstance();
+
+        // set the execution time to 16:15:00
+        dueDate.set(Calendar.HOUR_OF_DAY, 16);
+        dueDate.set(Calendar.MINUTE, 38);
+        dueDate.set(Calendar.SECOND, 0);
+
+        // if the time has already passed today, schedule for tomorrow
+        if (dueDate.before(currentDate)) {
+            dueDate.add(Calendar.HOUR_OF_DAY, 24);
+        }
+
+        // calculate the difference in milliseconds
+        long timeDiff = dueDate.getTimeInMillis() - currentDate.getTimeInMillis();
+
+        // build the periodic work request (24 hours) with the calculated initial delay
+        PeriodicWorkRequest dailyImageRequest = new PeriodicWorkRequest.Builder(
+                DailyImageWorker.class,
+                24,
+                TimeUnit.HOURS
+        )
+                .setInitialDelay(timeDiff, TimeUnit.MILLISECONDS)
+                .build();
+
+        WorkManager.getInstance(this).enqueueUniquePeriodicWork(
+                "DailyImageWorkerBrickStore",
+                ExistingPeriodicWorkPolicy.REPLACE, // replace to apply the new schedule
+                dailyImageRequest
+        );
+    }
+
     // interface for communication between javascript and android
     public class InterfaceWeb {
 
@@ -283,7 +337,7 @@ public class MainActivity extends AppCompatActivity {
             NotificationHelper.afficherNotification(MainActivity.this, titre, message, (int)(System.currentTimeMillis() % 10000));
         }
 
-        // sauve l'id utilisateur de php vers android
+        // saves the user id from php to android
         @SuppressWarnings("unused")
         @JavascriptInterface
         public void sauvegarderUserId(String userId) {
@@ -291,12 +345,29 @@ public class MainActivity extends AppCompatActivity {
             preferences.edit().putString("user_id", userId).apply();
         }
 
-        // deconnecte l'utilisateur coté android
+        // disconnects the user on android side
         @SuppressWarnings("unused")
         @JavascriptInterface
         public void deconnecterUser() {
             SharedPreferences preferences = getSharedPreferences("app_prefs", Context.MODE_PRIVATE);
             preferences.edit().remove("user_id").apply();
+        }
+
+        // enable or disable the daily image notification feature from the website
+        @SuppressWarnings("unused")
+        @JavascriptInterface
+        public void setDailyImageNotification(boolean enabled) {
+            SharedPreferences preferences = getSharedPreferences("app_prefs", Context.MODE_PRIVATE);
+            preferences.edit().putBoolean("daily_notif_enabled", enabled).apply();
+        }
+
+        // check if the daily image notification feature is enabled
+        @SuppressWarnings("unused")
+        @JavascriptInterface
+        public boolean isDailyImageNotificationEnabled() {
+            SharedPreferences preferences = getSharedPreferences("app_prefs", Context.MODE_PRIVATE);
+            // feature enabled by default
+            return preferences.getBoolean("daily_notif_enabled", true);
         }
     }
 }
