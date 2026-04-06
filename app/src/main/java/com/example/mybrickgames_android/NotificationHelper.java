@@ -1,6 +1,6 @@
 package com.example.mybrickgames_android;
 
-import android.Manifest;
+import android.annotation.SuppressLint;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
@@ -8,24 +8,33 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.os.Build;
-
 import androidx.core.app.NotificationCompat;
 import androidx.core.app.NotificationManagerCompat;
 import androidx.core.content.ContextCompat;
 
+// disables android studio's english spell checker for this file
+@SuppressWarnings("SpellCheckingInspection")
 public class NotificationHelper {
-    // identifiant unique pour le canal de notification
-    public static final String CANAL_ID = "achats_canal";
 
-    // creation du canal requis pour android 8 et superieur
-    public static void initialiserCanal(Context contexte) {
+    // unique identifier for the notification channel
+    private static final String ID_CANAL = "canal_commandes";
+    // visible name in the phone settings
+    private static final String NOM_CANAL = "notifications de commande";
+    // description visible in the phone settings
+    private static final String DESC_CANAL = "suivi du statut des commandes";
+
+    // method to create the notification channel (required for android 8+)
+    public static void creerCanalNotification(Context contexte) {
+        // check android version
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            CharSequence nom = "notifications mybrickstore";
-            String description = "notifications de commandes et fidelisation";
-            int importance = NotificationManager.IMPORTANCE_DEFAULT;
-            NotificationChannel canal = new NotificationChannel(CANAL_ID, nom, importance);
-            canal.setDescription(description);
+            NotificationChannel canal = new NotificationChannel(
+                    ID_CANAL,
+                    NOM_CANAL,
+                    NotificationManager.IMPORTANCE_HIGH
+            );
+            canal.setDescription(DESC_CANAL);
 
+            // get system service and create the channel
             NotificationManager gestionnaire = contexte.getSystemService(NotificationManager.class);
             if (gestionnaire != null) {
                 gestionnaire.createNotificationChannel(canal);
@@ -33,33 +42,41 @@ public class NotificationHelper {
         }
     }
 
-    // fonction pour afficher une notification
-    public static void afficherNotification(Context contexte, String titre, String message) {
-        // verification des permissions (android 13+)
+    // tells the android studio linter that the permission is already handled
+    @SuppressLint("MissingPermission")
+    // method to generate and display the notification to the user
+    public static void afficherNotification(Context contexte, String titre, String message, int idNotification) {
+        // intent to open the application on click
+        Intent intention = new Intent(contexte, MainActivity.class);
+        intention.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
+
+        PendingIntent intentionEnAttente = PendingIntent.getActivity(
+                contexte,
+                0,
+                intention,
+                PendingIntent.FLAG_IMMUTABLE
+        );
+
+        // visual construction of the notification
+        NotificationCompat.Builder constructeur = new NotificationCompat.Builder(contexte, ID_CANAL)
+                .setSmallIcon(R.mipmap.ic_launcher)
+                .setContentTitle(titre)
+                .setContentText(message)
+                .setPriority(NotificationCompat.PRIORITY_HIGH)
+                .setContentIntent(intentionEnAttente)
+                .setAutoCancel(true);
+
+        NotificationManagerCompat gestionnaireNotification = NotificationManagerCompat.from(contexte);
+
+        // permission check for recent phones (android 13+)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            if (ContextCompat.checkSelfPermission(contexte, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+            if (ContextCompat.checkSelfPermission(contexte, android.Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                // cancel if the user has refused the permission
                 return;
             }
         }
 
-        // preparation de l'action au clic (ouvrir l'application)
-        Intent intention = new Intent(contexte, MainActivity.class);
-        intention.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
-        PendingIntent intentionEnAttente = PendingIntent.getActivity(contexte, 0, intention, PendingIntent.FLAG_IMMUTABLE);
-
-        // construction visuelle de la notification
-        NotificationCompat.Builder constructeur = new NotificationCompat.Builder(contexte, CANAL_ID)
-                .setSmallIcon(R.mipmap.ic_launcher_round)
-                .setContentTitle(titre)
-                .setContentText(message)
-                .setPriority(NotificationCompat.PRIORITY_DEFAULT)
-                .setContentIntent(intentionEnAttente)
-                .setAutoCancel(true);
-
-        // declenchement
-        NotificationManagerCompat gestionnaireNotification = NotificationManagerCompat.from(contexte);
-        // id aleatoire pour ne pas ecraser les anciennes notifs
-        int idNotification = (int) System.currentTimeMillis();
+        // trigger display on the phone
         gestionnaireNotification.notify(idNotification, constructeur.build());
     }
 }

@@ -5,6 +5,12 @@
     <!-- permission pour acceder a internet -->
     <uses-permission android:name="android.permission.INTERNET" />
 
+    <!-- permission pour acceder a internet -->
+    <uses-permission android:name="android.permission.INTERNET" />
+
+    <!-- permission pour afficher des notifications (obligatoire sur android 13+) -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
     <!-- permission pour afficher le telechargement en arriere-plan -->
     <uses-permission android:name="android.permission.DOWNLOAD_WITHOUT_NOTIFICATION" />
 
