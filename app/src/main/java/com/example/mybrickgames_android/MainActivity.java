@@ -119,6 +119,12 @@ public class MainActivity extends AppCompatActivity {
         // activation du stockage dom pour garder les tokens de connexion
         parametresWeb.setDomStorageEnabled(true);
 
+        // configuration du gestionnaire de cookies pour maintenir la session
+        CookieManager gestionnaireCookies = CookieManager.getInstance();
+        gestionnaireCookies.setAcceptCookie(true);
+        // autoriser les cookies tiers si necessaire
+        gestionnaireCookies.setAcceptThirdPartyCookies(maWebView, true);
+
         // empecher l'ouverture des liens dans un navigateur externe et cacher le footer une fois le chargement termine
         maWebView.setWebViewClient(new WebViewClient() {
             @Override
@@ -264,6 +270,13 @@ public class MainActivity extends AppCompatActivity {
                 }
             }
         });
+    }
+
+    // force l'ecriture des cookies sur le disque quand l'application est mise en arriere-plan
+    @Override
+    protected void onStop() {
+        super.onStop();
+        CookieManager.getInstance().flush();
     }
 
     // gere l'intention quand l'application est deja en arriere-plan
