@@ -42,9 +42,7 @@ import com.google.android.material.bottomnavigation.BottomNavigationView;
 import java.util.Calendar;
 import java.util.concurrent.TimeUnit;
 
-/**
- * activite principale contenant la webview
- */
+// activite principale contenant la webview
 public class MainActivity extends AppCompatActivity {
 
     // declaration de la webview
@@ -70,6 +68,14 @@ public class MainActivity extends AppCompatActivity {
         demanderPermissionNotification();
         configurerPingServeur();
         configurerDailyImageWorker();
+        configurerPingFidelite();
+
+        // verification de connexion pour mettre a jour l'activite immediatement au demarrage de l'appli
+        SharedPreferences preferences = getSharedPreferences("app_prefs", Context.MODE_PRIVATE);
+        String userId = preferences.getString("user_id", null);
+        if (userId != null && !userId.isEmpty()) {
+            signalerPresence(userId);
+        }
 
         // configuration du lanceur pour le selecteur de fichiers android
         lanceurSelecteurFichier = registerForActivityResult(
@@ -268,10 +274,7 @@ public class MainActivity extends AppCompatActivity {
         traiterIntent(intent);
     }
 
-    /**
-     * traite les informations recues pour charger la bonne page webview
-     * @param intent l'intention a traiter
-     */
+    // traite les informations recues pour charger la bonne page webview
     private void traiterIntent(Intent intent) {
         if (intent == null) return;
 
@@ -370,6 +373,47 @@ public class MainActivity extends AppCompatActivity {
         );
     }
 
+    // configurer une tache en arriere-plan pour verifier la fidelite de l'utilisateur
+    private void configurerPingFidelite() {
+        // executer le worker de fidelite toutes les 24 heures
+        PeriodicWorkRequest requetePingFidelite = new PeriodicWorkRequest.Builder(
+                LoyaltyWorker.class,
+                24,
+                TimeUnit.HOURS
+        ).build();
+
+        WorkManager.getInstance(this).enqueueUniquePeriodicWork(
+                "PingFideliteServeur",
+                ExistingPeriodicWorkPolicy.KEEP,
+                requetePingFidelite
+        );
+    }
+
+    // methode pour signaler au serveur que l'utilisateur a ouvert l'application ou s'est connecte
+    private void signalerPresence(String userId) {
+        new Thread(() -> {
+            try {
+                java.net.URL url = new java.net.URL("https://mybrickstore.duckdns.org/api/marquerPresence");
+                java.net.HttpURLConnection connexion = (java.net.HttpURLConnection) url.openConnection();
+                connexion.setRequestMethod("POST");
+                connexion.setRequestProperty("Content-Type", "application/json; utf-8");
+                connexion.setRequestProperty("Accept", "application/json");
+                connexion.setDoOutput(true);
+
+                String json = "{\"id_utilisateur\": \"" + userId + "\"}";
+                try (java.io.OutputStream os = connexion.getOutputStream()) {
+                    byte[] input = json.getBytes(java.nio.charset.StandardCharsets.UTF_8);
+                    os.write(input, 0, input.length);
+                }
+
+                // on lit la reponse pour valider l'execution de la requete
+                connexion.getResponseCode();
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        }).start();
+    }
+
     // interface pour la communication entre javascript et android
     public class InterfaceWeb {
 
@@ -386,6 +430,9 @@ public class MainActivity extends AppCompatActivity {
         public void sauvegarderUserId(String userId) {
             SharedPreferences preferences = getSharedPreferences("app_prefs", Context.MODE_PRIVATE);
             preferences.edit().putString("user_id", userId).apply();
+
+            // on signale la presence des que l'utilisateur se connecte
+            signalerPresence(userId);
         }
 
         // deconnecte l'utilisateur cote android
