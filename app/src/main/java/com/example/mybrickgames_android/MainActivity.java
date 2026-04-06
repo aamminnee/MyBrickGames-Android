@@ -12,6 +12,9 @@ import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
+import android.view.GestureDetector;
+import android.view.MotionEvent;
+import android.view.View;
 import android.webkit.CookieManager;
 import android.webkit.JavascriptInterface;
 import android.webkit.URLUtil;
@@ -30,54 +33,68 @@ import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 import androidx.core.graphics.Insets;
+import androidx.core.view.GestureDetectorCompat;
 import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowInsetsCompat;
 import androidx.work.ExistingPeriodicWorkPolicy;
 import androidx.work.PeriodicWorkRequest;
 import androidx.work.WorkManager;
 
-// importation necessaire pour le menu de navigation
+// required import for navigation menu
 import com.google.android.material.bottomnavigation.BottomNavigationView;
 
 import java.util.Calendar;
 import java.util.concurrent.TimeUnit;
 
-// activite principale contenant la webview
+// main activity containing the webview
 public class MainActivity extends AppCompatActivity {
 
-    // declaration de la webview
+    // webview declaration
     private WebView maWebView;
 
-    // variables pour gerer le resultat du choix de fichier
+    // variables to handle file selection result
     private ValueCallback<Uri[]> callbackFichier;
     private ActivityResultLauncher<Intent> lanceurSelecteurFichier;
 
-    // code pour la permission des notifications
+    // code for notification permission
     private static final int CODE_PERMISSION_NOTIF = 112;
 
-    // drapeau pour savoir si on doit scroller vers la zone de glisser-deposer
+    // flag to know if we should scroll to drag and drop zone
     private boolean scrollToDragDrop = false;
 
-    @SuppressLint("SetJavaScriptEnabled")
+    // variables for swipe management
+    private GestureDetectorCompat detecteurGestes;
+    private int indexOngletActuel = 0;
+
+    // order of tab ids from left to right in the menu
+    private final int[] idOnglets = {
+            R.id.nav_home,
+            R.id.nav_play,
+            R.id.nav_create,
+            R.id.nav_profile,
+            R.id.nav_setting
+    };
+
+    @SuppressLint({"SetJavaScriptEnabled", "ClickableViewAccessibility"})
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
-        // initialisation du canal de notifications
+        // initialize notification channel
         NotificationHelper.creerCanalNotification(this);
         demanderPermissionNotification();
         configurerPingServeur();
         configurerDailyImageWorker();
         configurerPingFidelite();
 
-        // verification de connexion pour mettre a jour l'activite immediatement au demarrage de l'appli
+        // connection verification to update activity immediately at app startup
         SharedPreferences preferences = getSharedPreferences("app_prefs", Context.MODE_PRIVATE);
         String userId = preferences.getString("user_id", null);
         if (userId != null && !userId.isEmpty()) {
             signalerPresence(userId);
         }
 
-        // configuration du lanceur pour le selecteur de fichiers android
+        // configure launcher for android file selector
         lanceurSelecteurFichier = registerForActivityResult(
                 new ActivityResultContracts.StartActivityForResult(),
                 resultat -> {
@@ -89,197 +106,333 @@ public class MainActivity extends AppCompatActivity {
                                 resultats = new Uri[]{Uri.parse(chaineDonnees)};
                             }
                         }
-                        // on retourne le fichier selectionne au site web
+                        // return selected file to website
                         callbackFichier.onReceiveValue(resultats);
                         callbackFichier = null;
                     }
                 }
         );
 
-        // activation de l'affichage de bord a bord
+        // enable edge to edge display
         EdgeToEdge.enable(this);
         setContentView(R.layout.activity_main);
 
-        // gestion des marges des fenetres systeme
+        // handle system window margins
         ViewCompat.setOnApplyWindowInsetsListener(findViewById(R.id.main), (v, insets) -> {
             Insets barresSysteme = insets.getInsets(WindowInsetsCompat.Type.systemBars());
             v.setPadding(barresSysteme.left, barresSysteme.top, barresSysteme.right, barresSysteme.bottom);
             return insets;
         });
 
-        // initialisation de la webview
+        // initialize webview
         maWebView = findViewById(R.id.webview);
 
-        // configuration des parametres de la webview
+        // initialize gesture detector for swipe
+        detecteurGestes = new GestureDetectorCompat(this, new EcouteurGestesSwipe());
+
+        // listen to touches on webview to detect swipes
+        maWebView.setOnTouchListener((v, event) -> {
+            detecteurGestes.onTouchEvent(event);
+            // return false to let webview handle its own clicks and scrolls
+            return false;
+        });
+
+        // configure webview settings
         WebSettings parametresWeb = maWebView.getSettings();
 
-        // activation du javascript (l'avertissement xss est desormais ignore via l'annotation)
+        // enable javascript
         parametresWeb.setJavaScriptEnabled(true);
 
-        // activation du stockage dom pour garder les tokens de connexion
+        // enable dom storage to keep connection tokens
         parametresWeb.setDomStorageEnabled(true);
 
-        // configuration du gestionnaire de cookies pour maintenir la session
+        // configure cookie manager to maintain session
         CookieManager gestionnaireCookies = CookieManager.getInstance();
         gestionnaireCookies.setAcceptCookie(true);
-        // autoriser les cookies tiers si necessaire
+
+        // allow third party cookies if necessary
         gestionnaireCookies.setAcceptThirdPartyCookies(maWebView, true);
 
-        // empecher l'ouverture des liens dans un navigateur externe et cacher le footer une fois le chargement termine
+        // prevent opening links in external browser and hide footer once loaded
         maWebView.setWebViewClient(new WebViewClient() {
             @Override
             public void onPageFinished(WebView view, String url) {
                 super.onPageFinished(view, url);
 
-                // executer le code javascript pour cacher la balise footer
+                // execute javascript code to hide footer tag
                 view.evaluateJavascript("javascript:(function() { " +
                         "var footer = document.getElementsByTagName('footer')[0];" +
                         "if(footer) { footer.style.display = 'none'; }" +
                         "})()", null);
 
-                // met a jour le bouton jaune du menu selon l'url sans recharger la page
+                // update yellow menu button according to url without reloading page
                 BottomNavigationView menuNavigation = findViewById(R.id.bottom_navigation);
                 if (url != null) {
                     if (url.contains("play")) {
                         menuNavigation.getMenu().findItem(R.id.nav_play).setChecked(true);
+                        indexOngletActuel = 1;
                     } else if (url.contains("create")) {
                         menuNavigation.getMenu().findItem(R.id.nav_create).setChecked(true);
+                        indexOngletActuel = 2;
                     } else if (url.contains("profile") || url.contains("compte")) {
                         menuNavigation.getMenu().findItem(R.id.nav_profile).setChecked(true);
+                        indexOngletActuel = 3;
                     } else if (url.contains("setting")) {
                         menuNavigation.getMenu().findItem(R.id.nav_setting).setChecked(true);
+                        indexOngletActuel = 4;
                     } else {
-                        menuNavigation.getMenu().findItem(R.id.nav_home).setChecked(true);
+                        // verify we don't come from create button to avoid infinite loop
+                        if (indexOngletActuel != 2) {
+                            menuNavigation.getMenu().findItem(R.id.nav_home).setChecked(true);
+                            indexOngletActuel = 0;
+                        }
                     }
                 }
 
-                // scroller vers la zone de glisser-deposer extremement rapidement si le drapeau est actif
+                // scroll to drag and drop zone if flag is active
                 if (scrollToDragDrop) {
-                    // on utilise l'id 'drop-zone' present dans le fichier php
-                    view.evaluateJavascript("javascript:setTimeout(function() { var el = document.getElementById('drop-zone'); if(el) el.scrollIntoView({behavior: 'instant', block: 'center'}); }, 100);", null);
+                    // use smooth behavior for animated scroll
+                    view.evaluateJavascript("javascript:setTimeout(function() { var el = document.getElementById('drop-zone'); if(el) el.scrollIntoView({behavior: 'smooth', block: 'center'}); }, 100);", null);
                     scrollToDragDrop = false;
                 }
             }
         });
 
-        // ajout de l'interface javascript pour declencher des notifications depuis le site
+        // add javascript interface to trigger notifications from site
         maWebView.addJavascriptInterface(new InterfaceWeb(), "ApplicationAndroid");
 
-        // configuration du webchromeclient pour permettre l'upload de fichiers (images)
+        // configure webchromeclient to allow file uploads
         maWebView.setWebChromeClient(new WebChromeClient() {
             @Override
             public boolean onShowFileChooser(WebView vueWeb, ValueCallback<Uri[]> callback, FileChooserParams parametresSelecteur) {
-                // annuler la precedente requete si elle existe
+                // cancel previous request if it exists
                 if (callbackFichier != null) {
                     callbackFichier.onReceiveValue(null);
                 }
                 callbackFichier = callback;
 
-                // creer l'intention pour ouvrir l'explorateur de fichiers
+                // create intent to open file explorer
                 Intent intention = new Intent(Intent.ACTION_GET_CONTENT);
                 intention.addCategory(Intent.CATEGORY_OPENABLE);
                 intention.setType("image/*");
 
-                // lancer la boite de dialogue
-                lanceurSelecteurFichier.launch(Intent.createChooser(intention, "choisir une image"));
+                // launch dialog box
+                lanceurSelecteurFichier.launch(Intent.createChooser(intention, "choose an image"));
                 return true;
             }
         });
 
-        // gestionnaire de telechargement remplace par une fonction lambda
+        // download manager replaced by lambda function
         maWebView.setDownloadListener((url, userAgent, contentDisposition, mimetype, contentLength) -> {
-            // creation d'une requete de telechargement avec l'url
+            // create download request with url
             DownloadManager.Request requete = new DownloadManager.Request(Uri.parse(url));
 
-            // recuperation des cookies de la webview pour authentifier le telechargement
+            // retrieve webview cookies to authenticate download
             String cookies = CookieManager.getInstance().getCookie(url);
             requete.addRequestHeader("cookie", cookies);
             requete.addRequestHeader("User-Agent", userAgent);
 
-            // deviner le nom du fichier depuis l'url ou les entetes
+            // guess file name from url or headers
             String nomFichier = URLUtil.guessFileName(url, contentDisposition, mimetype);
             requete.setTitle(nomFichier);
-            requete.setDescription("téléchargement de la facture...");
+            requete.setDescription("downloading invoice...");
 
-            // autoriser le scanner de medias a voir le fichier
+            // allow media scanner to see file
             requete.allowScanningByMediaScanner();
 
-            // afficher la progression du telechargement dans la barre de notifications
+            // show download progress in notification bar
             requete.setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED);
 
-            // enregistrer le fichier dans le dossier public des telechargements
+            // save file in public downloads folder
             requete.setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, nomFichier);
 
-            // demarrer le telechargement
+            // start download
             DownloadManager gestionnaire = (DownloadManager) getSystemService(DOWNLOAD_SERVICE);
             if (gestionnaire != null) {
                 gestionnaire.enqueue(requete);
-                Toast.makeText(getApplicationContext(), "téléchargement en cours...", Toast.LENGTH_SHORT).show();
+                Toast.makeText(getApplicationContext(), "download in progress...", Toast.LENGTH_SHORT).show();
             }
         });
 
-        // traitement de l'intention de depart pour charger la bonne page
+        // process starting intent to load correct page
         traiterIntent(getIntent());
 
-        // initialiser le menu de navigation inferieur et gerer les clics
+        // initialize bottom navigation menu and handle clicks
         BottomNavigationView menuNavigation = findViewById(R.id.bottom_navigation);
         menuNavigation.setOnItemSelectedListener(item -> {
             int id = item.getItemId();
+            int nouvelIndex = 0;
+            String urlToLoad = "";
 
-            // modification des urls ci-dessous en fonction des veritables adresses de votre site
+            // determine new index and url based on selection
             if (id == R.id.nav_home) {
-                maWebView.loadUrl("https://mybrickstore.duckdns.org/");
-                return true;
+                nouvelIndex = 0;
+                urlToLoad = "https://mybrickstore.duckdns.org/";
             } else if (id == R.id.nav_play) {
-                maWebView.loadUrl("https://mybrickstore.duckdns.org/play");
-                return true;
+                nouvelIndex = 1;
+                urlToLoad = "https://mybrickstore.duckdns.org/play";
             } else if (id == R.id.nav_create) {
-                // verifie si on est deja sur la page d'accueil
-                String urlCourante = maWebView.getUrl();
-                if (urlCourante != null && (urlCourante.equals("https://mybrickstore.duckdns.org/") || urlCourante.equals("https://mybrickstore.duckdns.org"))) {
-                    // deja sur l'accueil, on injecte le javascript pour scroller extremement rapidement au centre
-                    maWebView.evaluateJavascript("javascript:var el = document.getElementById('drop-zone'); if(el) el.scrollIntoView({behavior: 'instant', block: 'center'});", null);
-                } else {
-                    // charge l'accueil et met le drapeau pour scroller une fois charge
-                    scrollToDragDrop = true;
-                    maWebView.loadUrl("https://mybrickstore.duckdns.org/");
-                }
-                return true;
+                nouvelIndex = 2;
+                urlToLoad = "https://mybrickstore.duckdns.org/";
             } else if (id == R.id.nav_profile) {
-                maWebView.loadUrl("https://mybrickstore.duckdns.org/compte");
-                return true;
+                nouvelIndex = 3;
+                urlToLoad = "https://mybrickstore.duckdns.org/compte";
             } else if (id == R.id.nav_setting) {
-                // lancement de la page des parametres native android
+                nouvelIndex = 4;
+            }
+
+            // handle native settings page
+            if (id == R.id.nav_setting) {
                 Intent intentParametres = new Intent(MainActivity.this, SettingsActivity.class);
                 startActivity(intentParametres);
-                return false;
+                // apply fade transition animation
+                overridePendingTransition(android.R.anim.fade_in, android.R.anim.fade_out);
+                indexOngletActuel = 4;
+                return true;
             }
-            return false;
+
+            // handle create page logic
+            if (id == R.id.nav_create) {
+                String urlCourante = maWebView.getUrl();
+                if (urlCourante != null && (urlCourante.equals("https://mybrickstore.duckdns.org/") || urlCourante.equals("https://mybrickstore.duckdns.org"))) {
+                    // smooth scroll to center if already on home page
+                    maWebView.evaluateJavascript("javascript:var el = document.getElementById('drop-zone'); if(el) el.scrollIntoView({behavior: 'smooth', block: 'center'});", null);
+                    indexOngletActuel = 2;
+                    return true;
+                } else {
+                    // set flag to scroll after load
+                    scrollToDragDrop = true;
+                }
+            }
+
+            // apply slide animation if tab actually changed
+            if (nouvelIndex != indexOngletActuel) {
+                loadPageWithAnimation(urlToLoad, nouvelIndex);
+                indexOngletActuel = nouvelIndex;
+            }
+
+            return true;
         });
 
-        // gestion du bouton de retour arriere (nouvelle methode non depreciee)
+        // handle back button press (new non-deprecated method)
         getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true) {
             @Override
             public void handleOnBackPressed() {
-                // si on peut revenir en arriere dans l'historique web
+                // if we can go back in web history
                 if (maWebView.canGoBack()) {
-                    maWebView.goBack();
+                    // simple crossfade animation for back navigation
+                    maWebView.animate().alpha(0f).setDuration(150).withEndAction(() -> {
+                        maWebView.goBack();
+                        maWebView.animate().alpha(1f).setDuration(150).start();
+                    }).start();
                 } else {
-                    // sinon on quitte proprement l'application
+                    // otherwise close app cleanly
                     finish();
                 }
             }
         });
     }
 
-    // force l'ecriture des cookies sur le disque quand l'application est mise en arriere-plan
+    // animate page transition with a slide effect
+    private void loadPageWithAnimation(String url, int targetIndex) {
+        // cancel any ongoing animations
+        maWebView.animate().cancel();
+
+        // if view has no width yet, load directly without animation
+        if (maWebView.getWidth() == 0) {
+            maWebView.loadUrl(url);
+            return;
+        }
+
+        // determine slide direction based on target tab index
+        boolean slideLeft = targetIndex > indexOngletActuel;
+        float width = maWebView.getWidth();
+        float translationOut = slideLeft ? -width : width;
+        float translationIn = slideLeft ? width : -width;
+
+        // slide current page out
+        maWebView.animate()
+                .translationX(translationOut)
+                .alpha(0f)
+                .setDuration(200)
+                .withEndAction(() -> {
+                    // load new url while view is hidden
+                    maWebView.loadUrl(url);
+                    // move view to opposite side instantly
+                    maWebView.setTranslationX(translationIn);
+                    // slide new page in
+                    maWebView.animate()
+                            .translationX(0)
+                            .alpha(1f)
+                            .setDuration(200)
+                            .start();
+                })
+                .start();
+    }
+
+    // private class for managing screen movements
+    private class EcouteurGestesSwipe extends GestureDetector.SimpleOnGestureListener {
+        // minimum speed and distance for gesture to be considered a swipe
+        private static final int SEUIL_SWIPE = 100;
+        private static final int SEUIL_VITESSE_SWIPE = 100;
+
+        @Override
+        public boolean onFling(MotionEvent e1, MotionEvent e2, float vitesseX, float vitesseY) {
+            if (e1 == null || e2 == null) return false;
+            boolean resultat = false;
+            try {
+                float differenceY = e2.getY() - e1.getY();
+                float differenceX = e2.getX() - e1.getX();
+
+                // verify movement is horizontal
+                if (Math.abs(differenceX) > Math.abs(differenceY)) {
+                    // verify distance and speed are sufficient
+                    if (Math.abs(differenceX) > SEUIL_SWIPE && Math.abs(vitesseX) > SEUIL_VITESSE_SWIPE) {
+                        if (differenceX > 0) {
+                            // swipe right (finger slides left to right) -> previous page
+                            allerVersOngletPrecedent();
+                        } else {
+                            // swipe left (finger slides right to left) -> next page
+                            allerVersOngletSuivant();
+                        }
+                        resultat = true;
+                    }
+                }
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+            return resultat;
+        }
+    }
+
+    // move menu to previous tab
+    private void allerVersOngletPrecedent() {
+        if (indexOngletActuel > 0) {
+            int targetTabId = idOnglets[indexOngletActuel - 1];
+            BottomNavigationView menuNavigation = findViewById(R.id.bottom_navigation);
+            // this automatically triggers animation via listener
+            menuNavigation.setSelectedItemId(targetTabId);
+        }
+    }
+
+    // move menu to next tab
+    private void allerVersOngletSuivant() {
+        if (indexOngletActuel < idOnglets.length - 1) {
+            int targetTabId = idOnglets[indexOngletActuel + 1];
+            BottomNavigationView menuNavigation = findViewById(R.id.bottom_navigation);
+            // this automatically triggers animation via listener
+            menuNavigation.setSelectedItemId(targetTabId);
+        }
+    }
+
+    // force writing cookies to disk when app goes to background
     @Override
     protected void onStop() {
         super.onStop();
         CookieManager.getInstance().flush();
     }
 
-    // gere l'intention quand l'application est deja en arriere-plan
+    // handle intent when app is already in background
     @Override
     protected void onNewIntent(Intent intent) {
         super.onNewIntent(intent);
@@ -287,7 +440,7 @@ public class MainActivity extends AppCompatActivity {
         traiterIntent(intent);
     }
 
-    // traite les informations recues pour charger la bonne page webview
+    // process received information to load correct webview page
     private void traiterIntent(Intent intent) {
         if (intent == null) return;
 
@@ -298,41 +451,61 @@ public class MainActivity extends AppCompatActivity {
             isDefault = false;
         } else if (intent.getBooleanExtra("open_web_settings", false)) {
             if (maWebView != null) {
-                // le bouton de la page native a ete clique, on charge l'url setting
+                // native page button was clicked, load setting url
                 maWebView.loadUrl("https://mybrickstore.duckdns.org/setting");
             }
             isDefault = false;
         } else {
-            // on recupere l'url specifique passee par le menu de la page native
+            // retrieve specific url passed by native page menu
             String urlToLoad = intent.getStringExtra("load_url");
             int targetTab = intent.getIntExtra("target_tab", -1);
 
             if (urlToLoad != null && maWebView != null) {
                 isDefault = false;
 
-                // logique speciale pour le bouton create
+                // figure out target index based on passed tab
+                int targetIndex = indexOngletActuel;
+                if (targetTab == R.id.nav_home) targetIndex = 0;
+                else if (targetTab == R.id.nav_play) targetIndex = 1;
+                else if (targetTab == R.id.nav_create) targetIndex = 2;
+                else if (targetTab == R.id.nav_profile) targetIndex = 3;
+
+                // special logic for create button
                 if (targetTab == R.id.nav_create) {
                     String urlCourante = maWebView.getUrl();
                     if (urlCourante != null && (urlCourante.equals("https://mybrickstore.duckdns.org/") || urlCourante.equals("https://mybrickstore.duckdns.org"))) {
-                        maWebView.evaluateJavascript("javascript:var el = document.getElementById('drop-zone'); if(el) el.scrollIntoView({behavior: 'instant', block: 'center'});", null);
+                        maWebView.evaluateJavascript("javascript:var el = document.getElementById('drop-zone'); if(el) el.scrollIntoView({behavior: 'smooth', block: 'center'});", null);
+                        indexOngletActuel = 2;
                     } else {
                         scrollToDragDrop = true;
-                        maWebView.loadUrl("https://mybrickstore.duckdns.org/");
+                        loadPageWithAnimation("https://mybrickstore.duckdns.org/", 2);
+                        indexOngletActuel = 2;
                     }
                 } else {
-                    // on charge l'url normale pour les autres onglets
-                    maWebView.loadUrl(urlToLoad);
+                    // load normal url with appropriate animation
+                    if (targetIndex != indexOngletActuel) {
+                        loadPageWithAnimation(urlToLoad, targetIndex);
+                        indexOngletActuel = targetIndex;
+                    } else {
+                        maWebView.loadUrl(urlToLoad);
+                    }
                 }
+            }
+
+            // force visual selection of tab if returning from other activity
+            if (targetTab != -1) {
+                BottomNavigationView menuNavigation = findViewById(R.id.bottom_navigation);
+                menuNavigation.getMenu().findItem(targetTab).setChecked(true);
             }
         }
 
-        // demarrage par defaut si aucune requete specifique n'est passee
+        // default startup if no specific request is passed
         if (isDefault && maWebView != null && maWebView.getUrl() == null) {
             maWebView.loadUrl("https://mybrickstore.duckdns.org");
         }
     }
 
-    // requete de permission pour afficher des notifications (android 13+)
+    // permission request to display notifications (android 13+)
     private void demanderPermissionNotification() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
@@ -341,9 +514,9 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    // configurer une tache en arriere-plan pour interroger le serveur
+    // configure background task to ping server
     private void configurerPingServeur() {
-        // verifier le serveur toutes les 15 minutes
+        // check server every 15 minutes
         PeriodicWorkRequest requetePing = new PeriodicWorkRequest.Builder(NotificationWorker.class, 15, TimeUnit.MINUTES).build();
         WorkManager.getInstance(this).enqueueUniquePeriodicWork(
                 "PingServeurBrickStore",
@@ -352,9 +525,9 @@ public class MainActivity extends AppCompatActivity {
         );
     }
 
-    // configurer une tache en arriere-plan pour recuperer l'image du jour toutes les 24 heures a 16:15
+    // configure background task to get daily image every 24 hours at 16:15
     private void configurerDailyImageWorker() {
-        // calculer le delai a partir de maintenant jusqu'au prochain 16:15
+        // calculate delay from now until next 16:15
         Calendar currentDate = Calendar.getInstance();
         Calendar dueDate = Calendar.getInstance();
 
@@ -362,15 +535,15 @@ public class MainActivity extends AppCompatActivity {
         dueDate.set(Calendar.MINUTE, 0);
         dueDate.set(Calendar.SECOND, 0);
 
-        // si l'heure est deja passee aujourd'hui, programmer pour demain
+        // if time has already passed today, schedule for tomorrow
         if (dueDate.before(currentDate)) {
             dueDate.add(Calendar.HOUR_OF_DAY, 24);
         }
 
-        // calculer la difference en millisecondes
+        // calculate difference in milliseconds
         long timeDiff = dueDate.getTimeInMillis() - currentDate.getTimeInMillis();
 
-        // construire la demande de travail periodique (24 heures) avec le delai initial calcule
+        // build periodic work request (24 hours) with calculated initial delay
         PeriodicWorkRequest dailyImageRequest = new PeriodicWorkRequest.Builder(
                 DailyImageWorker.class,
                 24,
@@ -386,9 +559,9 @@ public class MainActivity extends AppCompatActivity {
         );
     }
 
-    // configurer une tache en arriere-plan pour verifier la fidelite de l'utilisateur
+    // configure background task to check user loyalty
     private void configurerPingFidelite() {
-        // executer le worker de fidelite toutes les 24 heures
+        // run loyalty worker every 24 hours
         PeriodicWorkRequest requetePingFidelite = new PeriodicWorkRequest.Builder(
                 LoyaltyWorker.class,
                 24,
@@ -402,7 +575,7 @@ public class MainActivity extends AppCompatActivity {
         );
     }
 
-    // methode pour signaler au serveur que l'utilisateur a ouvert l'application ou s'est connecte
+    // method to signal server that user opened app or logged in
     private void signalerPresence(String userId) {
         new Thread(() -> {
             try {
@@ -419,7 +592,7 @@ public class MainActivity extends AppCompatActivity {
                     os.write(input, 0, input.length);
                 }
 
-                // on lit la reponse pour valider l'execution de la requete
+                // read response to validate request execution
                 connexion.getResponseCode();
             } catch (Exception e) {
                 e.printStackTrace();
@@ -427,28 +600,28 @@ public class MainActivity extends AppCompatActivity {
         }).start();
     }
 
-    // interface pour la communication entre javascript et android
+    // interface for communication between javascript and android
     public class InterfaceWeb {
 
-        // supprimer l'avertissement car cette methode est appelee par le javascript, pas par le java
+        // remove warning as this method is called by javascript
         @SuppressWarnings("unused")
         @JavascriptInterface
         public void declencherNotification(String titre, String message) {
             NotificationHelper.afficherNotification(MainActivity.this, titre, message, (int)(System.currentTimeMillis() % 10000));
         }
 
-        // enregistre l'id de l'utilisateur depuis le php vers android
+        // save user id from php to android
         @SuppressWarnings("unused")
         @JavascriptInterface
         public void sauvegarderUserId(String userId) {
             SharedPreferences preferences = getSharedPreferences("app_prefs", Context.MODE_PRIVATE);
             preferences.edit().putString("user_id", userId).apply();
 
-            // on signale la presence des que l'utilisateur se connecte
+            // signal presence as soon as user connects
             signalerPresence(userId);
         }
 
-        // deconnecte l'utilisateur cote android
+        // disconnect user on android side
         @SuppressWarnings("unused")
         @JavascriptInterface
         public void deconnecterUser() {
@@ -456,7 +629,7 @@ public class MainActivity extends AppCompatActivity {
             preferences.edit().remove("user_id").apply();
         }
 
-        // active ou desactive la fonctionnalite de notification de l'image du jour depuis le site
+        // enable or disable daily image notification feature from site
         @SuppressWarnings("unused")
         @JavascriptInterface
         public void setDailyImageNotification(boolean enabled) {
@@ -464,12 +637,12 @@ public class MainActivity extends AppCompatActivity {
             preferences.edit().putBoolean("daily_notif_enabled", enabled).apply();
         }
 
-        // verifie si la fonctionnalite de notification de l'image du jour est activee
+        // check if daily image notification feature is enabled
         @SuppressWarnings("unused")
         @JavascriptInterface
         public boolean isDailyImageNotificationEnabled() {
             SharedPreferences preferences = getSharedPreferences("app_prefs", Context.MODE_PRIVATE);
-            // fonctionnalite activee par defaut
+            // feature enabled by default
             return preferences.getBoolean("daily_notif_enabled", true);
         }
     }
