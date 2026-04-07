@@ -5,7 +5,7 @@
     android:layout_height="match_parent"
     android:background="#FFFFFF">
 
-    <!-- conteneur principal pour les parametres -->
+    <!-- main container for settings -->
     <LinearLayout
         android:layout_width="0dp"
         android:layout_height="0dp"
@@ -16,7 +16,7 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent">
 
-        <!-- titre de la page -->
+        <!-- page title -->
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -26,7 +26,7 @@
             android:layout_marginBottom="40dp"
             android:textColor="#000000" />
 
-        <!-- bouton on/off pour l'image du jour -->
+        <!-- on/off switch for daily image notification -->
         <Switch
             android:id="@+id/switch_notification"
             android:layout_width="match_parent"
@@ -36,7 +36,7 @@
             android:layout_marginBottom="40dp"
             android:textColor="#000000" />
 
-        <!-- bouton pour aller sur la webview des parametres -->
+        <!-- button to go to the settings webview -->
         <Button
             android:id="@+id/bouton_web_setting"
             android:layout_width="match_parent"
@@ -48,14 +48,15 @@
 
     </LinearLayout>
 
-    <!-- menu de navigation en bas -->
-    <!-- on ajoute android:theme pour lui appliquer la bulle jaune -->
+    <!-- bottom navigation menu -->
+    <!-- added fixed height and icon size to keep it identical everywhere -->
     <com.google.android.material.bottomnavigation.BottomNavigationView
         android:id="@+id/bottom_navigation"
         android:layout_width="0dp"
-        android:layout_height="wrap_content"
+        android:layout_height="65dp"
         android:background="#575757"
         android:theme="@style/BottomNavTheme"
+        app:itemIconSize="24dp"
         app:itemIconTint="@color/nav_item_colors"
         app:itemTextColor="@color/nav_item_colors"
         app:menu="@menu/bottom_nav_menu"

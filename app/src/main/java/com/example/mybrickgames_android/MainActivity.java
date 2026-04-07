@@ -121,7 +121,8 @@ public class MainActivity extends AppCompatActivity {
         ViewCompat.setOnApplyWindowInsetsListener(findViewById(R.id.main), (v, insets) -> {
             Insets barresSysteme = insets.getInsets(WindowInsetsCompat.Type.systemBars());
             v.setPadding(barresSysteme.left, barresSysteme.top, barresSysteme.right, barresSysteme.bottom);
-            return insets;
+            // return consumed to prevent bottomnavigationview from adding extra padding and hiding icons
+            return WindowInsetsCompat.CONSUMED;
         });
 
         // initialize webview
