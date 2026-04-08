@@ -171,7 +171,7 @@ public class MainActivity extends AppCompatActivity {
         });
 
         // charger l'url de la boutique
-        maWebView.loadUrl("http://mybrickstore.duckdns.org");
+        maWebView.loadUrl("https://mybrickstore.duckdns.org/");
 
         // gestion du bouton retour (nouvelle methode non depreciee)
         getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true) {
