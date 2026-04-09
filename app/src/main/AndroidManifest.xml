@@ -29,8 +29,10 @@
         android:usesCleartextTraffic="true"
         android:theme="@style/Theme.MyBrickGamesAndroid">
 
+        <!-- ajout de configchanges pour eviter le rechargement de la webview lors de la rotation -->
         <activity
             android:name=".MainActivity"
+            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
