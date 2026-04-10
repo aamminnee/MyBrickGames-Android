@@ -2,17 +2,14 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
-    <!-- permission pour acceder a internet -->
     <uses-permission android:name="android.permission.INTERNET" />
 
-    <!-- permission pour afficher des notifications (obligatoire sur android 13+) -->
+    <!-- required for notifications on android 13+ -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
-    <!-- permission pour afficher le telechargement en arriere-plan -->
     <uses-permission android:name="android.permission.DOWNLOAD_WITHOUT_NOTIFICATION" />
 
-    <!-- permission d'ecriture uniquement requise pour android 9 et inferieur -->
-    <!-- (les versions plus recentes n'en ont pas besoin pour le dossier telechargements) -->
+    <!-- write permission only required for android 9 and below -->
     <uses-permission
         android:name="android.permission.WRITE_EXTERNAL_STORAGE"
         android:maxSdkVersion="28"
@@ -29,7 +26,7 @@
         android:usesCleartextTraffic="true"
         android:theme="@style/Theme.MyBrickGamesAndroid">
 
-        <!-- ajout de configchanges pour eviter le rechargement de la webview lors de la rotation -->
+        <!-- prevents webview reload on screen rotation -->
         <activity
             android:name=".MainActivity"
             android:configChanges="orientation|screenSize|screenLayout|keyboardHidden"
@@ -40,7 +37,6 @@
             </intent-filter>
         </activity>
 
-        <!-- declaration de notre nouvelle page native pour les parametres -->
         <activity
             android:name=".SettingsActivity"
             android:exported="false" />

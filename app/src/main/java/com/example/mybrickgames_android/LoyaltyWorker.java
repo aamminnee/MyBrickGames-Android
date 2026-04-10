@@ -13,32 +13,39 @@ import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.util.Scanner;
 
-// classe pour verifier periodiquement la fidelite de l'utilisateur
+/**
+ * worker class to periodically check user loyalty status.
+ */
 public class LoyaltyWorker extends Worker {
 
-    // constructeur du worker de fidelite
+    /**
+     * initializes the loyalty worker.
+     *
+     * @param context the context of the application
+     * @param workerParams the parameters for the background worker
+     */
     public LoyaltyWorker(@NonNull Context context, @NonNull WorkerParameters workerParams) {
         super(context, workerParams);
     }
 
-    // methode executee en arriere-plan
+    /**
+     * executes the background task to check loyalty and potentially show a notification.
+     *
+     * @return the result indicating success, failure, or retry for the work
+     */
     @NonNull
     @Override
     public Result doWork() {
-        // recuperation de l'id utilisateur depuis les preferences
         SharedPreferences preferences = getApplicationContext().getSharedPreferences("app_prefs", Context.MODE_PRIVATE);
         String userId = preferences.getString("user_id", null);
 
-        // si l'utilisateur n'est pas connecte, on arrete le traitement car on ne sait pas qui verifier
         if (userId == null || userId.isEmpty()) {
             return Result.success();
         }
 
-        // url de l'api php (a remplacer par l'url reelle de votre serveur)
         String urlServeurPhp = "https://mybrickstore.duckdns.org/api/verifierFidelite";
 
         try {
-            // configuration de la connexion http
             URL urlApi = new URL(urlServeurPhp);
             HttpURLConnection connexionServeur = (HttpURLConnection) urlApi.openConnection();
             connexionServeur.setRequestMethod("POST");
@@ -46,41 +53,32 @@ public class LoyaltyWorker extends Worker {
             connexionServeur.setRequestProperty("Accept", "application/json");
             connexionServeur.setDoOutput(true);
 
-            // creation des donnees json a envoyer avec l'id utilisateur
             String jsonAEnvoyer = "{\"id_utilisateur\": " + userId + "}";
 
-            // ecriture des donnees dans le corps de la requete
             try (OutputStream fluxSortie = connexionServeur.getOutputStream()) {
                 byte[] octetsAEnvoyer = jsonAEnvoyer.getBytes(StandardCharsets.UTF_8);
                 fluxSortie.write(octetsAEnvoyer, 0, octetsAEnvoyer.length);
             }
 
-            // lecture de la reponse du serveur
             InputStream fluxEntree = connexionServeur.getInputStream();
             Scanner lecteurReponse = new Scanner(fluxEntree, StandardCharsets.UTF_8.name());
             String reponseTexte = lecteurReponse.useDelimiter("\\A").hasNext() ? lecteurReponse.next() : "";
             lecteurReponse.close();
 
-            // analyse de la reponse json
             JSONObject reponseJson = new JSONObject(reponseTexte);
 
-            // verification si une notification doit etre affichee
             if (reponseJson.optBoolean("afficher_notification", false)) {
                 String titreNotification = reponseJson.optString("titre", "Bonjour !");
                 String messageNotification = reponseJson.optString("message", "Revenez jouer sur l'application !");
 
-                // generation d'un id unique pour la notification
                 int idNotification = (int) (System.currentTimeMillis() % 10000);
 
-                // affichage de la notification grace a votre helper existant
                 NotificationHelper.afficherNotification(getApplicationContext(), titreNotification, messageNotification, idNotification);
             }
 
-            // succes de l'operation
             return Result.success();
 
         } catch (Exception exceptionReseau) {
-            // en cas d'erreur reseau, on reessaye plus tard
             exceptionReseau.printStackTrace();
             return Result.retry();
         }

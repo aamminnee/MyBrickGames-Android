@@ -5,7 +5,6 @@
     android:layout_height="match_parent"
     android:background="#FFFFFF">
 
-    <!-- main container for settings -->
     <LinearLayout
         android:layout_width="0dp"
         android:layout_height="0dp"
@@ -16,7 +15,6 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent">
 
-        <!-- page title -->
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -26,7 +24,7 @@
             android:layout_marginBottom="40dp"
             android:textColor="#000000" />
 
-        <!-- on/off switch for daily image notification -->
+        <!-- toggle for daily image notifications -->
         <Switch
             android:id="@+id/switch_notification"
             android:layout_width="match_parent"
@@ -36,7 +34,6 @@
             android:layout_marginBottom="40dp"
             android:textColor="#000000" />
 
-        <!-- button to go to the settings webview -->
         <Button
             android:id="@+id/bouton_web_setting"
             android:layout_width="match_parent"
@@ -48,8 +45,7 @@
 
     </LinearLayout>
 
-    <!-- bottom navigation menu -->
-    <!-- added fixed height and icon size to keep it identical everywhere -->
+    <!-- fixed height and icon size for visual consistency across pages -->
     <com.google.android.material.bottomnavigation.BottomNavigationView
         android:id="@+id/bottom_navigation"
         android:layout_width="0dp"

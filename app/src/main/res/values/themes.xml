@@ -1,13 +1,12 @@
 <resources xmlns:tools="http://schemas.android.com/tools">
-    <!-- Base application theme. -->
+
     <style name="Base.Theme.MyBrickGamesAndroid" parent="Theme.Material3.DayNight.NoActionBar">
-        <!-- Customize your light theme here. -->
         <!-- <item name="colorPrimary">@color/my_light_primary</item> -->
     </style>
 
     <style name="Theme.MyBrickGamesAndroid" parent="Base.Theme.MyBrickGamesAndroid" />
 
-    <!-- theme specifique pour forcer la bulle du menu (indicateur actif) en jaune -->
+    <!-- force active menu indicator bubble to yellow -->
     <style name="BottomNavTheme" parent="">
         <item name="colorSecondaryContainer">#FFFF00</item>
     </style>
